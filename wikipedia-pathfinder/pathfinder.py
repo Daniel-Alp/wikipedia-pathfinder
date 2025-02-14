@@ -11,22 +11,26 @@ async def get_urls(session: aiohttp.ClientSession, url: str):
                 [f"https://en.wikipedia.org{a["href"]}" 
                  for a in soup.select("p > a") if "href" in a.attrs and a["href"].startswith("/wiki")])
 
+def recover_path(visited: dict, start_url: str, goal_url: str):
+    path = []
+    parent = goal_url
+    while parent is not None:
+        path.append(parent)
+        parent = visited[parent]
+    path.reverse()
+    return path
+
+
 async def bfs(start_url: str, goal_url: str):
     async with aiohttp.ClientSession() as session:
         queue = deque()
         queue.append(start_url)
         visited = {start_url : None}
-        while queue:
-            # Check if goal URL in current layer
-            if goal_url in queue:
-                path = []
-                parent = goal_url
-                while parent is not None:
-                    path.append(parent)
-                    parent = visited[parent]
-                path.reverse()
-                return path
 
+        if start_url == goal_url:
+            return [start_url]
+
+        while queue:
             # Get next layer of URLs
             batch_size = 20 # Choose how many tasks to await at once
             size = 0
@@ -39,9 +43,12 @@ async def bfs(start_url: str, goal_url: str):
             for node in layer:
                 parent, children = node
                 for child in children:
-                    if child not in visited:
-                        visited[child] = parent
-                        queue.append(child)
+                    if child in visited:
+                        continue
+                    visited[child] = parent
+                    queue.append(child)
+                    if child == goal_url:
+                        return recover_path(visited, start_url, goal_url)
         return None
 
 if __name__ == "__main__":
